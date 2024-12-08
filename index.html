@@ -38,6 +38,7 @@
 
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
+    let lastHeartRate = null;
     let lastLatitude = null;
     let lastLongitude = null;
 
@@ -53,13 +54,18 @@
           const feeds = data.feeds[0];
           const heartRate = feeds.field1;
           const rawValue = feeds.field2;
-          
-          // Update heart rate and raw value on the page
-          document.getElementById('heartRate').innerText = heartRate + ' BPM';
+
+          // Use the last known heart rate if the new value is not available
+          if (heartRate !== undefined) {
+            lastHeartRate = heartRate;
+          }
+
+          // Display the last known heart rate
+          document.getElementById('heartRate').innerText = (lastHeartRate || 'Loading...') + ' BPM';
           document.getElementById('rawValue').innerText = rawValue;
 
           // Display alert if heart rate is above 80 or below 50
-          if (heartRate > 80 || heartRate < 50) {
+          if (lastHeartRate > 80 || lastHeartRate < 50) {
             document.getElementById('alert').style.display = 'block';  // Show alert
           } else {
             document.getElementById('alert').style.display = 'none';  // Hide alert
