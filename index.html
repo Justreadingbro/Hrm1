@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heart Rate Monitor with GPS</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Heart Rate Monitor with GPS</h1>
+    <div id="alert">
+      <strong>ALERT: Heart rate is abnormal!</strong>
+    </div>
+    <div class="data-container">
+      <p><strong>Heart Rate:</strong> <span id="heartRate">Loading...</span></p>
+      <p><strong>Raw Value:</strong> <span id="rawValue">Loading...</span></p>
+    </div>
+    <div id="location">
+      <h2>Your Current Location:</h2>
+      <p id="latitude"></p>
+      <p id="longitude"></p>
+      <a id="mapsLink" target="_blank" class="button">Open in OpenStreetMap</a>
+    </div>
+    <div id="map"></div>
+  </div>
+
+  <div class="container">
+    <h2>Important Information</h2>
+    <ul class="info-links">
+      <li><a href="heart-attack.html">What to Do in Case of a Heart Attack</a></li>
+      <li><a href="medicine.html">Medicines to Use</a></li>
+      <li><a href="emergency-contacts.html">Emergency Contacts</a></li>
+    </ul>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+  <script>
+    // Function to fetch and display heart rate data from ThingSpeak
+    function updateData() {
+      const channelId = "2765312";  // Replace with your actual ThingSpeak Channel ID
+      const apiKey = "WPQAF4KMIF5SNCGD";  // Replace with your actual ThingSpeak Read API Key if needed
+      const url = `https://api.thingspeak.com/channels/${channelId}/feeds.json?api_key=${apiKey}&results=1`;
+
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          const feeds = data.feeds[0];
+          const heartRate = feeds.field1;
+          const rawValue = feeds.field2;
+          
+          // Update heart rate and raw value on the page
+          document.getElementById('heartRate').innerText = heartRate + ' BPM';
+          document.getElementById('rawValue').innerText = rawValue;
+
+          // Display alert if heart rate is above 120 or below 50
+          if (heartRate > 120 || heartRate < 50) {
+            document.getElementById('alert').style.display = 'block';  // Show alert
+          } else {
+            document.getElementById('alert').style.display = 'none';  // Hide alert
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching data:', error);
+          document.getElementById('heartRate').innerText = 'Error';
+          document.getElementById('rawValue').innerText = 'Error';
+        });
+
+      setTimeout(updateData, 5000);  // Update every 5 seconds
+    }
+
+    // Function to send the GPS location data to ESP32
+   function sendData(latitude, longitude) {
+  var apiEndpoint = window.location.protocol === 'https:' ? 'https://' : 'http://';
+  apiEndpoint += "192.168.3.188/update";  // Replace with your ESP32 IP address
+
+  var xhr = new XMLHttpRequest();
+  xhr.open("POST", apiEndpoint, true);
+  xhr.setRequestHeader("Content-Type", "application/json");
+  xhr.onreadystatechange = function () {
+    if (xhr.readyState === 4 && xhr.status === 200) {
+      console.log("Location data sent successfully");
+    } else {
+      console.error("Error sending location data");
+    }
+  };
+  xhr.send(JSON.stringify({ latitude: latitude, longitude: longitude }));
+
+  // Update ThingSpeak with location data
+  ThingSpeak.setField(3, latitude);  // Assuming field3 for latitude
+  ThingSpeak.setField(4, longitude);  // Assuming field4 for longitude
+  ThingSpeak.writeFields(channelId, apiKey);
+}
+
+    // Function to get the GPS location and display it on the map
+    function getLocationAndUpdateMap() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+          var latitude = position.coords.latitude;
+          var longitude = position.coords.longitude;
+
+          document.getElementById('latitude').textContent = `Latitude: ${latitude}`;
+          document.getElementById('longitude').textContent = `Longitude: ${longitude}`;
+          document.getElementById('mapsLink').href = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=18/${latitude}/${longitude}`;
+          document.getElementById('mapsLink').textContent = 'Open in OpenStreetMap';
+          document.getElementById('location').style.display = 'block';
+
+          const map = document.getElementById('map');
+          map.style.display = 'block';
+          const leafletMap = L.map('map').setView([latitude, longitude], 13);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          }).addTo(leafletMap);
+          L.marker([latitude, longitude]).addTo(leafletMap)
+            .bindPopup(`Latitude: ${latitude}<br>Longitude: ${longitude}`)
+            .openPopup();
+
+          sendData(latitude, longitude);
+        }, function(error) {
+          console.error("Error getting GPS location:", error);
+        });
+      } else {
+        console.error("Geolocation is not supported by this browser.");
+      }
+    }
+
+    // Start updating data and sending location when the page loads
+    window.onload = function() {
+      updateData();
+      getLocationAndUpdateMap();
+    };
+  </script>
+</body>
+</html>
