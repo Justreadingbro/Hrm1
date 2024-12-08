@@ -39,6 +39,8 @@
   <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
   <script>
     let lastUpdateTime = 0;
+    let lastLatitude = null;
+    let lastLongitude = null;
 
     // Function to fetch and display heart rate data from ThingSpeak
     function updateData() {
@@ -57,7 +59,7 @@
           document.getElementById('heartRate').innerText = heartRate + ' BPM';
           document.getElementById('rawValue').innerText = rawValue;
 
-          // Display alert if heart rate is above 120 or below 50
+          // Display alert if heart rate is above 80 or below 50
           if (heartRate > 80 || heartRate < 50) {
             document.getElementById('alert').style.display = 'block';  // Show alert
           } else {
@@ -129,15 +131,12 @@
             .bindPopup(`Latitude: ${latitude}<br>Longitude: ${longitude}`)
             .openPopup();
 
+          // Store the last known location
+          lastLatitude = latitude;
+          lastLongitude = longitude;
+
           // Send data to ESP32
           sendDataToESP32(latitude, longitude);
-
-          // Throttle sending data to ThingSpeak to once every 15 seconds
-          const currentTime = Date.now();
-          if (currentTime - lastUpdateTime >= 15000) {
-            sendToThingSpeak(latitude, longitude);
-            lastUpdateTime = currentTime;
-          }
         }, function(error) {
           console.error("Error getting GPS location:", error);
         });
@@ -146,11 +145,21 @@
       }
     }
 
+    // Function to periodically send the last known location to ThingSpeak
+    function periodicLocationUpdate() {
+      if (lastLatitude !== null && lastLongitude !== null) {
+        sendToThingSpeak(lastLatitude, lastLongitude);
+      } else {
+        console.error("No valid location to send to ThingSpeak");
+      }
+    }
+
     // Start updating data and sending location when the page loads
     window.onload = function() {
       updateData();
       getLocationAndUpdateMap();
       setInterval(getLocationAndUpdateMap, 5000); // Check location every 5 seconds
+      setInterval(periodicLocationUpdate, 15000); // Send location to ThingSpeak every 15 seconds
     };
   </script>
 </body>
